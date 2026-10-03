@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environment
+.venv/
+.python-version
+.env
+
+# Tools
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# RAG corpus (vLLM sources)
+data/raw/
+
+# Generated data (rebuilt with `index` / `search_dataset` / `answer_dataset`)
+data/processed/
+data/output/
+datasets_public/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

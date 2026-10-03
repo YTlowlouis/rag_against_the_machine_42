@@ -1,0 +1,25 @@
+[project]
+name = "rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "bm25s>=0.3.11",
+    "fire>=0.7.1",
+    "langchain-text-splitters>=1.1.2",
+    "pathlib>=1.0.1",
+    "pydantic>=2.13.4",
+    "pystemmer>=3.1.0",
+    "torch>=2.14.1",
+    "tqdm>=4.70.0",
+    "transformers>=5.18.0",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
