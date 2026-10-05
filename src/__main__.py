@@ -44,6 +44,12 @@ class Cli:
     ):
         if self.generator is None:
             self.generator = AnswerGeneration(self.indexer)
+        try:
+            self.generator.answer_dataset(
+                student_search_results_path, save_directory
+            )
+        except (AnswerError, SearchError) as e:
+            print(f"Error: {e}")
 
     def evaluate(self, student_search_results_path: str, dataset_path: str):
         pass

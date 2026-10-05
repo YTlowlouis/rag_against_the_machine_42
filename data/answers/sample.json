@@ -1,0 +1,101 @@
+{
+  "search_results": [
+    {
+      "question_id": "189c8b8a-e59c-4fca-92ad-c02df42cbe40",
+      "question": "What activation formats does the fused batched MoE layer return in vLLM?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe.py",
+          "first_character_index": 16197,
+          "last_character_index": 17405
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors_moe.py",
+          "first_character_index": 14697,
+          "last_character_index": 16454
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/modelopt.py",
+          "first_character_index": 62237,
+          "last_character_index": 63064
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/gguf.py",
+          "first_character_index": 20015,
+          "last_character_index": 21195
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/lora/models.py",
+          "first_character_index": 1788,
+          "last_character_index": 2337
+        }
+      ],
+      "answer": "The fused batched MoE layer returns the activation format \"silu\"."
+    },
+    {
+      "question_id": "02789461-05fd-435d-9673-91606102d6c9",
+      "question": "What are the default values for FP8_MIN and FP8_MAX constants in vLLM's triton_flash_attention module?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/utils/fp8_utils.py",
+          "first_character_index": 13686,
+          "last_character_index": 15675
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/fused_moe/batched_deep_gemm_moe.py",
+          "first_character_index": 5239,
+          "last_character_index": 6022
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/tests/kernels/quantization/test_block_fp8.py",
+          "first_character_index": 2416,
+          "last_character_index": 3880
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/quantization/utils/fp8_utils.py",
+          "first_character_index": 8680,
+          "last_character_index": 10232
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/benchmarks/kernels/benchmark_w8a8_block_fp8.py",
+          "first_character_index": 5503,
+          "last_character_index": 7303
+        }
+      ],
+      "answer": "The default values for FP8_MIN and FP8_MAX constants in vLLM's triton_flash_attention module are not explicitly provided in the context. However, based on the context provided, the values are used as follows:  \n- `fp8_min` is the minimum value of the float8_e4m3fn type.  \n- `fp8_max` is the maximum value of the float8_e4m3fn type.  \n\nSince the context does not specify these values, the answer is: **not known**."
+    },
+    {
+      "question_id": "e852801e-b909-4360-82ea-cedb2a1be919",
+      "question": "What determines whether vLLM's sampler returns Pythonized results or deferred Pythonization arguments?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/sampler.py",
+          "first_character_index": 26785,
+          "last_character_index": 28489
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/sampler.py",
+          "first_character_index": 21626,
+          "last_character_index": 23307
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/sampler.py",
+          "first_character_index": 2857,
+          "last_character_index": 4841
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/sampler.py",
+          "first_character_index": 10920,
+          "last_character_index": 12852
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/sampler.py",
+          "first_character_index": 7875,
+          "last_character_index": 9409
+        }
+      ],
+      "answer": "The sampling type determines whether vLLM's sampler returns Pythonized results or deferred Pythonization arguments."
+    }
+  ],
+  "k": 5
+}

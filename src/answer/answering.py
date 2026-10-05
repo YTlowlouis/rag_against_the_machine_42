@@ -1,4 +1,6 @@
 from pathlib import Path
+from pydantic import ValidationError
+from tqdm import tqdm
 
 import torch
 from transformers import (
@@ -13,7 +15,9 @@ from src.models.provided_models import (
     MinimalAnswer,
     MinimalSearchResults,
     MinimalSource,
+    StudentSearchResultsAndAnswer,
     UnansweredQuestion,
+    StudentSearchResults,
 )
 
 
@@ -33,24 +37,29 @@ class AnswerGeneration:
         if k <= 0 or not query.strip():
             raise AnswerError("Invalid query or k <= 0")
 
-        self._load_model()
-
         self.indexer.load()
         result = self.indexer.search(UnansweredQuestion(question=query), k)
+        return self.answer_search_result(result)
 
-        sources = self._build_context(result.retrieved_sources)
+    def answer_search_result(
+        self, search_result: MinimalSearchResults
+    ) -> MinimalAnswer:
+
+        self._load_model()
 
         if self.tokenizer is None:
             raise AnswerError("Tokenizer is not loaded, run _load_model")
         if self.model is None:
             raise AnswerError("Model is not loaded, run _load_model")
 
+        sources = self._build_context(search_result.retrieved_sources)
+
         for source in sources:
             ids = self.tokenizer.encode(str(source["text"]))
             if len(ids) > self.max_tokens:
                 source["text"] = self.tokenizer.decode(ids[: self.max_tokens])
 
-        prompt = self._build_prompt(query, sources)
+        prompt = self._build_prompt(search_result.question, sources)
 
         inputs = self.tokenizer(prompt, return_tensors="pt")
         with torch.no_grad():
@@ -65,7 +74,7 @@ class AnswerGeneration:
         if "</think>" in answer:
             answer = answer.split("</think>")[-1].strip()
 
-        return MinimalAnswer(**result.model_dump(), answer=answer)
+        return MinimalAnswer(**search_result.model_dump(), answer=answer)
 
     def _build_context(
         self, retrieved_sources: list[MinimalSource]
@@ -127,3 +136,32 @@ class AnswerGeneration:
                 self.model_name, torch_dtype="auto"
             )
             self.model.eval()
+
+    def answer_dataset(self, search_result: str, save_directory: str):
+        try:
+            dataset = StudentSearchResults.model_validate_json(
+                Path(search_result).read_text(encoding="utf-8")
+            )
+        except ValidationError as e:
+            raise AnswerError(
+                f"Invalid dataset format in {search_result}"
+            ) from e
+        except PermissionError as e:
+            raise AnswerError(
+                f"Invalid permissions for {search_result}"
+            ) from e
+        except OSError as e:
+            raise AnswerError(f"Error when opening {search_result}") from e
+
+        answers = [
+            self.answer_search_result(res)
+            for res in tqdm(dataset.search_results, desc="answering")
+        ]
+        output = StudentSearchResultsAndAnswer(
+            search_results=answers, k=dataset.k
+        )
+        output_dir = Path(save_directory)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / Path(search_result).name).write_text(
+            output.model_dump_json(indent=2), encoding="utf-8"
+        )
