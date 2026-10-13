@@ -1,6 +1,7 @@
 from json.decoder import JSONDecodeError
 import bm25s
 import json
+import Stemmer
 from pydantic import ValidationError
 from pathlib import Path
 from tqdm import tqdm
@@ -30,6 +31,7 @@ class Index:
         self.raw_path = Path("data/raw")
         self.retriever = None
         self.splitter: RecursiveCharacterTextSplitter | None = None
+        self.stemmer = Stemmer.Stemmer("english")
 
     def chunk_text(self, chunk_size: int) -> None:
         self.splitter = RecursiveCharacterTextSplitter(
@@ -100,7 +102,7 @@ class Index:
             raise IndexingError("Empty corpus, chunk text before")
         texts = [doc.page_content for doc in self.corpus]
 
-        tokens = bm25s.tokenize(texts, stopwords="en")
+        tokens = bm25s.tokenize(texts, stopwords="en", stemmer=self.stemmer)
 
         self.retriever = bm25s.BM25()
         self.retriever.index(tokens)
@@ -138,7 +140,9 @@ class Index:
         if self.retriever is None:
             raise SearchError("retriever is not loaded, run index")
         query_tokens = bm25s.tokenize(
-            [q.question for q in questions], stopwords="en"
+            [q.question for q in questions],
+            stopwords="en",
+            stemmer=self.stemmer,
         )
         results, _ = self.retriever.retrieve(query_tokens, k=k)
 
