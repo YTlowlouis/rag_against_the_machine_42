@@ -28,10 +28,13 @@ class SearchError(Exception):
 class Index:
     def __init__(self):
         self.corpus: list[Document] = []
-        self.raw_path = Path("data/raw")
+        self.raw_path: Path
         self.retriever = None
         self.splitter: RecursiveCharacterTextSplitter | None = None
         self.stemmer = Stemmer.Stemmer("english")
+
+    def _set_path(self, path: str) -> None:
+        self.raw_path = Path(path)
 
     def chunk_text(self, chunk_size: int) -> None:
         self.splitter = RecursiveCharacterTextSplitter(
@@ -96,6 +99,12 @@ class Index:
                 start = doc.metadata["start_index"]
                 doc.metadata["end_index"] = start + len(doc.page_content)
             self.corpus.extend(docs)
+
+    def check_corpus(self) -> None:
+        if not self.raw_path.exists():
+            raise IndexingError(f"Corpus not found at {self.raw_path}")
+        if not self.raw_path.is_dir():
+            raise IndexingError("Path is not a directory")
 
     def build_index(self) -> None:
         if not self.corpus:
