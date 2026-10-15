@@ -153,6 +153,9 @@ class AnswerGeneration:
         except OSError as e:
             raise AnswerError(f"Error when opening {search_result}") from e
 
+        if not dataset.search_results:
+            raise AnswerError(f"No search result to answer in {search_result}")
+
         answers = [
             self.answer_search_result(res)
             for res in tqdm(dataset.search_results, desc="answering")
@@ -161,7 +164,12 @@ class AnswerGeneration:
             search_results=answers, k=dataset.k
         )
         output_dir = Path(save_directory)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / Path(search_result).name).write_text(
-            output.model_dump_json(indent=2), encoding="utf-8"
-        )
+        out_file = output_dir / Path(search_result).name
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_file.write_text(
+                output.model_dump_json(indent=2), encoding="utf-8"
+            )
+        except OSError as e:
+            raise AnswerError(f"Couldn't write to {out_file}") from e
+        print(f"Saved student_search_results_and_answer to {out_file}")

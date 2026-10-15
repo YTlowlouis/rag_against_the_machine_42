@@ -37,11 +37,16 @@ class Index:
         self.raw_path = Path(path)
 
     def chunk_text(self, chunk_size: int) -> None:
-        self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=int(chunk_size * 0.2),
-            add_start_index=True,
-        )
+        try:
+            self.splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=int(chunk_size * 0.2),
+                add_start_index=True,
+            )
+        except (ValueError, TypeError) as e:
+            raise IndexingError(
+                f"Invalid max_chunk_size: {chunk_size}"
+            ) from e
         extensions = {".md", ".txt"}
         files = [
             file
@@ -68,12 +73,17 @@ class Index:
             self.corpus.extend(docs)
 
     def index_code(self, chunk_size: int) -> None:
-        self.splitter = RecursiveCharacterTextSplitter.from_language(
-            language=Language.PYTHON,
-            chunk_size=chunk_size,
-            chunk_overlap=int(chunk_size * 0.2),
-            add_start_index=True,
-        )
+        try:
+            self.splitter = RecursiveCharacterTextSplitter.from_language(
+                language=Language.PYTHON,
+                chunk_size=chunk_size,
+                chunk_overlap=int(chunk_size * 0.2),
+                add_start_index=True,
+            )
+        except (ValueError, TypeError) as e:
+            raise IndexingError(
+                f"Invalid max_chunk_size: {chunk_size}"
+            ) from e
         extensions = {".py"}
         files = [
             file
@@ -133,14 +143,24 @@ class Index:
             }
             for doc in self.corpus
         ]
-        self.retriever.save(path, corpus=corpus)
+        try:
+            self.retriever.save(path, corpus=corpus)
+        except OSError as e:
+            raise IndexingError(f"Couldn't save index to {path}") from e
 
     def load(self, path: str = "data/processed") -> None:
-        self.retriever = bm25s.BM25.load(path, load_corpus=True)
+        try:
+            self.retriever = bm25s.BM25.load(path, load_corpus=True)
+        except (OSError, ValueError) as e:
+            raise IndexingError(
+                f"Couldn't load index from {path}, run index first"
+            ) from e
 
     def search(
         self, question: UnansweredQuestion, k: int = 5
     ) -> MinimalSearchResults:
+        if not question.question.lstrip():
+            raise SearchError("Empty query")
         return self.search_dataset([question], k).search_results[0]
 
     def search_dataset(
@@ -148,12 +168,19 @@ class Index:
     ) -> StudentSearchResults:
         if self.retriever is None:
             raise SearchError("retriever is not loaded, run index")
+        if not questions:
+            raise SearchError("No question to search")
+        if not isinstance(k, int) or k <= 0:
+            raise SearchError(f"k must be a positive integer, got {k}")
         query_tokens = bm25s.tokenize(
             [q.question for q in questions],
             stopwords="en",
             stemmer=self.stemmer,
         )
-        results, _ = self.retriever.retrieve(query_tokens, k=k)
+        try:
+            results, _ = self.retriever.retrieve(query_tokens, k=k)
+        except (ValueError, TypeError) as e:
+            raise SearchError(f"Search failed with k={k}: {e}") from e
 
         search_results = [
             MinimalSearchResults(
@@ -192,8 +219,12 @@ class Index:
         results = self.search_dataset(dataset.rag_questions, k)
 
         out_dir = Path(save_directory)
-        out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / Path(dataset_path).name
-        out_file.write_text(
-            results.model_dump_json(indent=2), encoding="utf-8"
-        )
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_file.write_text(
+                results.model_dump_json(indent=2), encoding="utf-8"
+            )
+        except OSError as e:
+            raise SearchError(f"Couldn't write to {out_file}") from e
+        print(f"Saved student_search_results to {out_file}")

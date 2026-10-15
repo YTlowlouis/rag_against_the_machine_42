@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by <login>.*
+*This project has been created as part of the 42 curriculum by loboehm.*
 
 # RAG against the machine
 
@@ -71,7 +71,7 @@ uv run python -m src search "How do I enable LoRA adapters in vLLM?" --k 5
 
 # 3. Search a whole dataset
 uv run python -m src search_dataset \
-  --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
+  --dataset_path data/public/UnansweredQuestions/dataset_docs_public.json \
   --k 10 \
   --save_directory data/output/search_results/UnansweredQuestions
 
@@ -82,6 +82,29 @@ uv run python -m src answer "How do I enable LoRA adapters in vLLM?" --k 5
 uv run python -m src answer_dataset \
   --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
   --save_directory data/output/search_results_and_answer/UnansweredQuestions
+
+# 6. Evaluate the search results against the ground truth
+uv run python -m src evaluate \
+  --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+  --dataset_path data/public/AnsweredQuestions/dataset_docs_public.json
+```
+
+Example `evaluate` output:
+
+```
+Recall@1: 0.570
+Recall@3: 0.790
+Recall@5: 0.860
+Recall@10: 0.890
+```
+
+Invalid inputs (empty query, `k <= 0`, missing or malformed files, missing
+index, unwritable output directory, ...) are reported with a one-line error
+message instead of a traceback, for example:
+
+```bash
+$ uv run python -m src search "tensor parallel" --k 0
+k must be a positive integer, got 0
 ```
 
 Example `search` output:
@@ -126,6 +149,7 @@ question ──► tokenization ──► BM25 retrieval (top-k) ◄────
 | CLI | `src/__main__.py` | Fire entry point, error handling |
 | `Index` | `src/indexing/index.py` | Chunking, BM25 indexing, persistence, search |
 | `AnswerGeneration` | `src/answer/answering.py` | Context building, prompting, generation |
+| `Evaluate` | `src/evaluate/evaluate.py` | recall@k against a ground-truth dataset |
 | Data models | `src/models/` | Pydantic models exchanged between stages |
 
 All data exchanged between stages is validated with pydantic models
@@ -160,7 +184,8 @@ Retrieval uses **BM25** through the [`bm25s`](https://github.com/xhluca/bm25s)
 library.
 
 - **Tokenization**: lowercasing, regex word tokenization, English stopwords
-  removal; the same tokenizer is applied to chunks and queries.
+  removal and English stemming (`PyStemmer`); the same tokenizer is applied
+  to chunks and queries, so "running" in a question matches "run" in a chunk.
 - **Ranking**: each chunk is scored with BM25, which combines term frequency
   (with saturation, parameter `k1`), inverse document frequency (rare terms
   weigh more) and length normalization (parameter `b`). The top-k chunks are
@@ -188,19 +213,45 @@ library.
 
 ## Performance analysis
 
-> TODO: fill in after running the evaluation.
+Measured on the public datasets (100 docs questions, 99 code questions) with
+the default settings (`--max_chunk_size 2000`, search with `--k 10`), on a
+laptop CPU (AMD Ryzen 7 4700U, 8 threads). The scores computed by the
+`evaluate` command are identical to those reported by the official
+moulinette.
 
 | Dataset | Recall@1 | Recall@3 | Recall@5 | Recall@10 |
 |---|---|---|---|---|
-| Docs | | | | |
-| Code | | | | |
+| Docs | 0.570 | 0.790 | 0.860 | 0.890 |
+| Code | 0.323 | 0.485 | 0.566 | 0.616 |
 
 | Metric | Requirement | Measured |
 |---|---|---|
-| Indexing time (whole corpus) | ≤ 5 min | |
-| Retrieval (200 questions) | ≤ 90 s | |
-| Recall@5 docs | ≥ 80% | |
-| Recall@5 code | ≥ 50% | |
+| Indexing time (whole corpus, ~15,000 chunks) | ≤ 5 min | 6.4 s |
+| Retrieval (`search_dataset`, ~100 questions) | ≤ 90 s / 200 questions | ~4 s |
+| Recall@5 docs | ≥ 80% | 86.0% ✅ |
+| Recall@5 code | ≥ 50% | 56.6% ✅ |
+
+Indexing and retrieval times include loading Python and the libraries;
+retrieval itself is a single batched BM25 call.
+
+**Analysis**
+
+- **Docs questions score well**: questions are phrased with the same
+  vocabulary as the documentation, which is exactly what a lexical model like
+  BM25 rewards. Going from k=5 to k=10 only adds 3 points (86% → 89%): the
+  remaining misses are questions whose wording differs from the source.
+- **Code questions are harder**: questions use natural language ("how does
+  the scheduler pick the next request") while the code uses identifiers
+  (`schedule_next`, `SchedulerOutput`). The tokenizer does not split
+  `snake_case` / `CamelCase` identifiers, so many relevant chunks share few
+  terms with the question.
+- **Chunk size vs overlap**: a source only counts as found if the IoU between
+  the retrieved chunk and the reference span is at least 0.05. Large chunks
+  increase the chance of containing the answer but dilute the IoU, so the
+  chunk size is the main parameter to tune (the scores above use 2000).
+- **Answer generation** is the slow part: on the laptop above, one answer
+  takes from ~40 s to ~2 min depending on the context length (up to k
+  snippets of 500 tokens each), while the retrieval part takes milliseconds.
 
 ## Design decisions
 
@@ -220,6 +271,13 @@ library.
 - **Snippets re-read from disk**: `answer_dataset` only receives source
   locations, so the same context-building code serves both `answer` and
   `answer_dataset`.
+- **IoU-based evaluation**: `evaluate` reimplements the subject's metric (same
+  file and character-range IoU ≥ 0.05, averaged over questions) without
+  calling the moulinette, so retrieval changes can be measured quickly.
+- **One exception class per stage** (`IndexingError`, `SearchError`,
+  `AnswerError`, `EvaluateError`): low-level errors (I/O, pydantic
+  validation, library errors) are converted into these exceptions and the CLI
+  prints their message, so no command ever ends with a traceback.
 
 ## Challenges faced
 
@@ -233,6 +291,13 @@ library.
   disabled through the chat template, with a safety strip on the output.
 - **Large generated files in Git**: the index and corpus are excluded through
   `.gitignore` and rebuilt with `index`.
+- **Robustness to odd inputs**: library errors surfaced as tracebacks
+  (`k` larger than the corpus, non-integer `k`, `chunk_size <= 0`, empty
+  dataset, missing index). Inputs are now validated early and every
+  remaining library error is wrapped in the stage's exception.
+- **Checking the evaluation itself**: an overlap bug made every source in the
+  right file count as found; comparing the `evaluate` output with the
+  moulinette on the same files caught it.
 
 ## Resources
 
@@ -257,6 +322,10 @@ Claude (Anthropic) was used as an assistant during the project, for:
 - **Answer generation** (`src/answer/answering.py`): help structuring the
   pipeline, writing the prompt builder, token-based truncation and output
   decoding, and reviewing the code for bugs.
+- **Evaluation** (`src/evaluate/evaluate.py`): explanations of the IoU
+  overlap and recall@k computation, and review of the implementation.
+- **Testing and robustness**: running edge-case tests on every command and
+  adding error handling for the cases that produced tracebacks.
 - **Documentation**: drafting this README.
 
 Indexing and retrieval design, integration and testing were done by the

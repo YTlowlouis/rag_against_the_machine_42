@@ -9,6 +9,10 @@ from src.models.provided_models import (
 )
 
 
+class EvaluateError(Exception):
+    pass
+
+
 class Evaluate:
     def __init__(self) -> None:
         pass
@@ -26,8 +30,11 @@ class Evaluate:
         )
         common_start = max(start, start1)
         common_end = min(end, end1)
-        lenght_common = max(0, common_end - common_start)
-        return True
+
+        intersection = max(0, common_end - common_start)
+        union = (end - start) + (end1 - start1) - intersection
+
+        return union > 0 and intersection / union >= 0.05
 
     def recall_question(
         self, student: MinimalSearchResults, truth: AnsweredQuestion, k: int
@@ -48,12 +55,37 @@ class Evaluate:
     def evaluate(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
-        results = StudentSearchResults.model_validate_json(
-            Path(student_search_results_path).read_text(encoding="utf-8")
-        )
+        try:
+            results = StudentSearchResults.model_validate_json(
+                Path(student_search_results_path).read_text(encoding="utf-8")
+            )
 
-        dataset = RagDataset.model_validate_json(
-            Path(dataset_path).read_text(encoding="utf-8")
-        )
-        for question in results.search_results:
-            id = question.question_id
+            dataset = RagDataset.model_validate_json(
+                Path(dataset_path).read_text(encoding="utf-8")
+            )
+        except ValidationError as e:
+            raise EvaluateError(f"Invalid {e.title} file format") from e
+        except OSError as e:
+            raise EvaluateError(f"Error when opening {e.filename}") from e
+
+        truths = {
+            q.question_id: q
+            for q in dataset.rag_questions
+            if isinstance(q, AnsweredQuestion)
+        }
+
+        pairs = [
+            (res, truths[res.question_id])
+            for res in results.search_results
+            if res.question_id in truths
+        ]
+
+        if not pairs:
+            raise EvaluateError("No matching question id for the two files")
+        for k in (1, 3, 5, 10):
+            if k > results.k:
+                break
+            scores = sum(
+                self.recall_question(r, t, k) for r, t in pairs
+            ) / len(pairs)
+            print(f"Recall@{k}: {scores:.3f}")

@@ -7,7 +7,7 @@ from src.answer import AnswerGeneration
 from src.models.provided_models import UnansweredQuestion
 from src.answer.answering import AnswerError
 from src.indexing.index import IndexingError, SearchError
-from src.evaluate.evaluate import Evaluate
+from src.evaluate.evaluate import Evaluate, EvaluateError
 
 
 class Cli:
@@ -31,22 +31,30 @@ class Cli:
             return
 
     def search(self, query: str, k: int = 5) -> None:
-        self.indexer.load()
-        result = self.indexer.search(UnansweredQuestion(question=query), k)
-        print(result.model_dump_json(indent=2))
+        try:
+            self.indexer.load()
+            result = self.indexer.search(UnansweredQuestion(question=query), k)
+            print(result.model_dump_json(indent=2))
+        except (IndexingError, SearchError) as e:
+            print(e)
+            return
 
     def search_dataset(
         self, dataset_path: str, k: int, save_directory: str
     ) -> None:
-        self.indexer.load()
-        self.indexer.search_dataset_rag(dataset_path, save_directory, k)
+        try:
+            self.indexer.load()
+            self.indexer.search_dataset_rag(dataset_path, save_directory, k)
+        except (SearchError, IndexingError) as e:
+            print(e)
+            return
 
     def answer(self, query: str, k: int = 5) -> None:
         if self.generator is None:
             self.generator = AnswerGeneration(self.indexer)
         try:
             result = self.generator.generate_answer(query, k)
-        except (AnswerError, SearchError) as e:
+        except (AnswerError, SearchError, IndexingError) as e:
             print(f"Error: {e}")
             return
         print(result.model_dump_json(indent=2))
@@ -66,7 +74,11 @@ class Cli:
     def evaluate(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
-        pass
+        try:
+            self.evaluator.evaluate(student_search_results_path, dataset_path)
+        except EvaluateError as e:
+            print(e)
+            return
 
 
 def main():
