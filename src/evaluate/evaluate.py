@@ -10,16 +10,27 @@ from src.models.provided_models import (
 
 
 class EvaluateError(Exception):
-    pass
+    """Raised when the evaluation cannot be performed."""
 
 
 class Evaluate:
+    """Compute the recall@k of search results against a ground truth."""
+
     def __init__(self) -> None:
-        pass
+        """Create an evaluator."""
 
     def _check_overlap(
         self, source_1: MinimalSource, source_2: MinimalSource
     ) -> bool:
+        """Tell whether two sources overlap with an IoU of at least 0.05.
+
+        Args:
+            source_1: First source.
+            source_2: Second source.
+
+        Returns:
+            True if the character ranges overlap enough, False otherwise.
+        """
         start, end = (
             source_1.first_character_index,
             source_1.last_character_index,
@@ -39,6 +50,16 @@ class Evaluate:
     def recall_question(
         self, student: MinimalSearchResults, truth: AnsweredQuestion, k: int
     ) -> float:
+        """Compute the recall@k of a single question.
+
+        Args:
+            student: Sources retrieved for the question.
+            truth: Ground truth of the question.
+            k: Number of retrieved sources taken into account.
+
+        Returns:
+            The share of correct sources found in the top-k results.
+        """
         if not truth.sources:
             return 0.0
         top_k = student.retrieved_sources[:k]
@@ -55,6 +76,15 @@ class Evaluate:
     def evaluate(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
+        """Print the mean recall@k for k in 1, 3, 5 and 10.
+
+        Args:
+            student_search_results_path: Path to a StudentSearchResults file.
+            dataset_path: Path to a RagDataset file with answered questions.
+
+        Raises:
+            EvaluateError: If a file cannot be read or no question matches.
+        """
         try:
             results = StudentSearchResults.model_validate_json(
                 Path(student_search_results_path).read_text(encoding="utf-8")

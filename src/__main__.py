@@ -9,7 +9,10 @@ from src.evaluate.evaluate import Evaluate, EvaluateError
 
 
 class Cli:
+    """Command-line interface of the RAG system, exposed with Python Fire."""
+
     def __init__(self) -> None:
+        """Create the indexer and the evaluator; the generator is lazy."""
         self.indexer = Index()
         self.generator: AnswerGeneration | None = None
         self.evaluator = Evaluate()
@@ -17,6 +20,12 @@ class Cli:
     def index(
         self, max_chunk_size: int = 2000, path: str = "data/raw"
     ) -> None:
+        """Chunk the corpus and build the BM25 index under data/processed.
+
+        Args:
+            max_chunk_size: Maximum size of a chunk, in characters (<= 2000).
+            path: Directory containing the raw corpus.
+        """
         try:
             self.indexer._set_path(path)
             self.indexer.check_corpus()
@@ -29,6 +38,13 @@ class Cli:
             return
 
     def search(self, query: str, k: int = 5) -> None:
+        """Print the top-k sources for a single query.
+
+        Args:
+            query: Question to search for.
+            k: Number of sources to return.
+        """
+        query = str(query)
         try:
             self.indexer.load()
             result = self.indexer.search(UnansweredQuestion(question=query), k)
@@ -40,6 +56,13 @@ class Cli:
     def search_dataset(
         self, dataset_path: str, k: int, save_directory: str
     ) -> None:
+        """Search every question of a dataset and save the results.
+
+        Args:
+            dataset_path: Path to a RagDataset JSON file.
+            k: Number of sources to return per question.
+            save_directory: Directory where the search results are written.
+        """
         try:
             self.indexer.load()
             self.indexer.search_dataset_rag(dataset_path, save_directory, k)
@@ -48,6 +71,13 @@ class Cli:
             return
 
     def answer(self, query: str, k: int = 5) -> None:
+        """Print an answer to a query, generated from the top-k sources.
+
+        Args:
+            query: Question to answer.
+            k: Number of sources given to the model as context.
+        """
+        query = str(query)
         if self.generator is None:
             self.generator = AnswerGeneration(self.indexer)
         try:
@@ -60,6 +90,12 @@ class Cli:
     def answer_dataset(
         self, student_search_results_path: str, save_directory: str
     ) -> None:
+        """Answer every question of a search results file and save them.
+
+        Args:
+            student_search_results_path: Path to a StudentSearchResults file.
+            save_directory: Directory where the answers are written.
+        """
         if self.generator is None:
             self.generator = AnswerGeneration(self.indexer)
         try:
@@ -72,6 +108,12 @@ class Cli:
     def evaluate(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
+        """Print the recall@k of search results against a ground truth.
+
+        Args:
+            student_search_results_path: Path to a StudentSearchResults file.
+            dataset_path: Path to a RagDataset file with answered questions.
+        """
         try:
             self.evaluator.evaluate(student_search_results_path, dataset_path)
         except EvaluateError as e:
@@ -80,6 +122,7 @@ class Cli:
 
 
 def main() -> None:
+    """Run the Fire command-line interface."""
     fire.Fire(Cli())
 
 

@@ -8,6 +8,14 @@ run:
 	uv run python -m src $(ARGS)
 
 
+debug:
+	uv run python -m pdb -m src $(ARGS)
+
+
+test:
+	uv run pytest
+
+
 clean:
 	rm -rf __pycache__ .mypy_cache .pytest_cache
 	find . -type d -name "__pycache__" -not -path "./.venv/*" -exec rm -rf {} +

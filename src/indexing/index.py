@@ -15,16 +15,22 @@ from src.models.provided_models import (
 )
 
 
+MAX_CHUNK_SIZE = 2000
+
+
 class IndexingError(Exception):
-    pass
+    """Raised when the corpus cannot be chunked, indexed or saved."""
 
 
 class SearchError(Exception):
-    pass
+    """Raised when a search cannot be performed."""
 
 
 class Index:
+    """Chunk a corpus, build a BM25 index over it and search it."""
+
     def __init__(self) -> None:
+        """Initialise an empty corpus and an unloaded retriever."""
         self.corpus: list[Document] = []
         self.raw_path: Path
         self.retriever: bm25s.BM25 | None = None
@@ -32,9 +38,42 @@ class Index:
         self.stemmer = Stemmer.Stemmer("english")
 
     def _set_path(self, path: str) -> None:
+        """Set the directory of the raw corpus.
+
+        Args:
+            path: Directory containing the files to index.
+        """
         self.raw_path = Path(path)
 
+    def _check_chunk_size(self, chunk_size: int) -> None:
+        """Check that the chunk size is accepted by the evaluator.
+
+        Args:
+            chunk_size: Maximum size of a chunk, in characters.
+
+        Raises:
+            IndexingError: If chunk_size is not an integer in [1, 2000].
+        """
+        if (
+            not isinstance(chunk_size, int)
+            or isinstance(chunk_size, bool)
+            or not 0 < chunk_size <= MAX_CHUNK_SIZE
+        ):
+            raise IndexingError(
+                "max_chunk_size must be an integer between 1 and "
+                f"{MAX_CHUNK_SIZE}, got {chunk_size}"
+            )
+
     def chunk_text(self, chunk_size: int) -> None:
+        """Split the Markdown and text files of the corpus into chunks.
+
+        Args:
+            chunk_size: Maximum size of a chunk, in characters.
+
+        Raises:
+            IndexingError: If chunk_size is invalid.
+        """
+        self._check_chunk_size(chunk_size)
         try:
             self.splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size,
@@ -71,6 +110,15 @@ class Index:
             self.corpus.extend(docs)
 
     def index_code(self, chunk_size: int) -> None:
+        """Split the Python files of the corpus into chunks.
+
+        Args:
+            chunk_size: Maximum size of a chunk, in characters.
+
+        Raises:
+            IndexingError: If chunk_size is invalid.
+        """
+        self._check_chunk_size(chunk_size)
         try:
             self.splitter = RecursiveCharacterTextSplitter.from_language(
                 language=Language.PYTHON,
@@ -109,12 +157,22 @@ class Index:
             self.corpus.extend(docs)
 
     def check_corpus(self) -> None:
+        """Check that the corpus path exists and is a directory.
+
+        Raises:
+            IndexingError: If the path is missing or is not a directory.
+        """
         if not self.raw_path.exists():
             raise IndexingError(f"Corpus not found at {self.raw_path}")
         if not self.raw_path.is_dir():
             raise IndexingError("Path is not a directory")
 
     def build_index(self) -> None:
+        """Tokenize the chunks and build the BM25 index.
+
+        Raises:
+            IndexingError: If the corpus is empty.
+        """
         if not self.corpus:
             raise IndexingError("Empty corpus, chunk text before")
         texts = [doc.page_content for doc in self.corpus]
@@ -125,6 +183,14 @@ class Index:
         self.retriever.index(tokens)
 
     def save(self, path: str = "data/processed") -> None:
+        """Save the index and its corpus to disk.
+
+        Args:
+            path: Directory where the index is saved.
+
+        Raises:
+            IndexingError: If the index is not built or cannot be written.
+        """
         if self.retriever is None:
             raise IndexingError(
                 "Retriever is not initialised, run build_index"
@@ -147,6 +213,14 @@ class Index:
             raise IndexingError(f"Couldn't save index to {path}") from e
 
     def load(self, path: str = "data/processed") -> None:
+        """Load a saved index and its corpus.
+
+        Args:
+            path: Directory where the index was saved.
+
+        Raises:
+            IndexingError: If the index cannot be loaded.
+        """
         try:
             self.retriever = bm25s.BM25.load(path, load_corpus=True)
         except (OSError, ValueError) as e:
@@ -157,6 +231,18 @@ class Index:
     def search(
         self, question: UnansweredQuestion, k: int = 5
     ) -> MinimalSearchResults:
+        """Return the top-k sources for a single question.
+
+        Args:
+            question: Question to search for.
+            k: Number of sources to return.
+
+        Returns:
+            The search results of the question.
+
+        Raises:
+            SearchError: If the query is empty or the search fails.
+        """
         if not question.question.lstrip():
             raise SearchError("Empty query")
         return self.search_dataset([question], k).search_results[0]
@@ -164,6 +250,19 @@ class Index:
     def search_dataset(
         self, questions: list[UnansweredQuestion], k: int = 5
     ) -> StudentSearchResults:
+        """Return the top-k sources for each question, in a single batch.
+
+        Args:
+            questions: Questions to search for.
+            k: Number of sources to return per question.
+
+        Returns:
+            The search results of every question.
+
+        Raises:
+            SearchError: If the index is not loaded, there is no question,
+                k is invalid or the search fails.
+        """
         if self.retriever is None:
             raise SearchError("retriever is not loaded, run index")
         if not questions:
@@ -200,6 +299,17 @@ class Index:
     def search_dataset_rag(
         self, dataset_path: str, save_directory: str, k: int = 5
     ) -> None:
+        """Search every question of a dataset file and save the results.
+
+        Args:
+            dataset_path: Path to a RagDataset JSON file.
+            save_directory: Directory where the results are written.
+            k: Number of sources to return per question.
+
+        Raises:
+            SearchError: If the dataset cannot be read or the results cannot
+                be written.
+        """
         try:
             dataset = RagDataset.model_validate_json(
                 Path(dataset_path).read_text(encoding="utf-8")

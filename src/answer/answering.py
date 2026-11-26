@@ -22,11 +22,18 @@ from src.models.provided_models import (
 
 
 class AnswerError(Exception):
-    pass
+    """Raised when an answer cannot be generated."""
 
 
 class AnswerGeneration:
+    """Generate answers grounded in retrieved sources with Qwen."""
+
     def __init__(self, indexer: Index) -> None:
+        """Create a generator; the model is loaded on first use.
+
+        Args:
+            indexer: Index used to retrieve the sources.
+        """
         self.indexer = indexer
         self.model_name = "Qwen/Qwen3-0.6B"
         self.tokenizer: PreTrainedTokenizerBase | None = None
@@ -34,8 +41,22 @@ class AnswerGeneration:
         self.max_tokens = 500
 
     def generate_answer(self, query: str, k: int) -> MinimalAnswer:
-        if k <= 0 or not query.strip():
-            raise AnswerError("Invalid query or k <= 0")
+        """Retrieve the top-k sources for a query and answer it.
+
+        Args:
+            query: Question to answer.
+            k: Number of sources given to the model as context.
+
+        Returns:
+            The answer with its sources.
+
+        Raises:
+            AnswerError: If the query is empty or k is invalid.
+        """
+        if not query.strip():
+            raise AnswerError("Empty query")
+        if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
+            raise AnswerError(f"k must be a positive integer, got {k}")
 
         self.indexer.load()
         result = self.indexer.search(UnansweredQuestion(question=query), k)
@@ -44,6 +65,17 @@ class AnswerGeneration:
     def answer_search_result(
         self, search_result: MinimalSearchResults
     ) -> MinimalAnswer:
+        """Answer a question from its already retrieved sources.
+
+        Args:
+            search_result: Question and its retrieved sources.
+
+        Returns:
+            The answer with its sources.
+
+        Raises:
+            AnswerError: If the model is not loaded.
+        """
 
         self._load_model()
 
@@ -79,6 +111,14 @@ class AnswerGeneration:
     def _build_context(
         self, retrieved_sources: list[MinimalSource]
     ) -> list[dict[str, str | int]]:
+        """Read the text of each source from disk.
+
+        Args:
+            retrieved_sources: Sources to read.
+
+        Returns:
+            One dict per readable source, with its id, file and text.
+        """
         sources: list[dict[str, str | int]] = []
         for n, src in enumerate(retrieved_sources):
             try:
@@ -100,6 +140,18 @@ class AnswerGeneration:
     def _build_prompt(
         self, query: str, sources: list[dict[str, str | int]]
     ) -> str:
+        """Build the chat prompt given to the model.
+
+        Args:
+            query: Question to answer.
+            sources: Context sources, as returned by _build_context.
+
+        Returns:
+            The prompt, formatted with the model's chat template.
+
+        Raises:
+            AnswerError: If the tokenizer is not loaded.
+        """
         if self.tokenizer is None:
             raise AnswerError("Tokenizer is not loaded, run _load_model")
 
@@ -130,6 +182,7 @@ class AnswerGeneration:
         ))
 
     def _load_model(self) -> None:
+        """Load the tokenizer and the model if they are not loaded yet."""
         if self.model is None:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -138,6 +191,16 @@ class AnswerGeneration:
             self.model.eval()
 
     def answer_dataset(self, search_result: str, save_directory: str) -> None:
+        """Answer every question of a search results file and save them.
+
+        Args:
+            search_result: Path to a StudentSearchResults JSON file.
+            save_directory: Directory where the answers are written.
+
+        Raises:
+            AnswerError: If the file cannot be read, has no question or the
+                answers cannot be written.
+        """
         try:
             dataset = StudentSearchResults.model_validate_json(
                 Path(search_result).read_text(encoding="utf-8")
