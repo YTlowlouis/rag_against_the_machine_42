@@ -1,6 +1,5 @@
 import uuid
 from pydantic import BaseModel, Field
-import fire
 
 
 # source file with snippet in it

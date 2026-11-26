@@ -122,12 +122,12 @@ class AnswerGeneration:
                 "content": f"Context:\n{context}\n\nQuestion: {query}",
             },
         ]
-        return self.tokenizer.apply_chat_template(
+        return str(self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=False,
-        )
+        ))
 
     def _load_model(self) -> None:
         if self.model is None:
@@ -137,7 +137,7 @@ class AnswerGeneration:
             )
             self.model.eval()
 
-    def answer_dataset(self, search_result: str, save_directory: str):
+    def answer_dataset(self, search_result: str, save_directory: str) -> None:
         try:
             dataset = StudentSearchResults.model_validate_json(
                 Path(search_result).read_text(encoding="utf-8")

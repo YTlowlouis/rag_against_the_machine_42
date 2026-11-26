@@ -14,10 +14,10 @@ clean:
 
 
 lint:
-	uv run flake8 .
-	uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run flake8 . --extend-exclude .venv,.env
+	uv run mypy . --exclude '(^|/)\.(venv|env)/' --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 
 lint-strict:
-	uv run flake8 .
-	uv run mypy . --strict
+	uv run flake8 . --extend-exclude .venv,.env
+	uv run mypy . --exclude '(^|/)\.(venv|env)/' --strict

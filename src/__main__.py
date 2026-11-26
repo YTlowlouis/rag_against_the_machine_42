@@ -1,7 +1,5 @@
-import sys
 import fire
 
-from src import indexing
 from src.indexing import Index
 from src.answer import AnswerGeneration
 from src.models.provided_models import UnansweredQuestion
@@ -81,9 +79,9 @@ class Cli:
             return
 
 
-def main():
+def main() -> None:
     fire.Fire(Cli())
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

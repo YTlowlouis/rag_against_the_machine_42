@@ -1,6 +1,4 @@
-from json.decoder import JSONDecodeError
 import bm25s
-import json
 import Stemmer
 from pydantic import ValidationError
 from pathlib import Path
@@ -26,10 +24,10 @@ class SearchError(Exception):
 
 
 class Index:
-    def __init__(self):
+    def __init__(self) -> None:
         self.corpus: list[Document] = []
         self.raw_path: Path
-        self.retriever = None
+        self.retriever: bm25s.BM25 | None = None
         self.splitter: RecursiveCharacterTextSplitter | None = None
         self.stemmer = Stemmer.Stemmer("english")
 
